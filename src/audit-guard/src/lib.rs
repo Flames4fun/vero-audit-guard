@@ -593,11 +593,12 @@ mod tests {
     }
 
     #[test]
-    fn test_audit_report_creation() {
-        let report = AuditReport {
-            policy_name: "test-policy".to_string(),
-            compliant: true,
-            violations: vec![],
+    fn confirmed_record_is_serializable() {
+        let record = ConfirmedAuditRecord {
+            record_id: "test-policy-1".into(),
+            observed_at: "2026-07-19T00:00:00Z".into(),
+            evidence_hash: "0".repeat(64),
+            payload: json!({ "policy": "test", "confirmed": true }),
         };
         assert_eq!(report.policy_name, "test-policy");
         assert!(report.compliant);

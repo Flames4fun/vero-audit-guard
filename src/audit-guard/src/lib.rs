@@ -220,13 +220,13 @@ impl AuditGuardClient {
         }
         
         let endpoint = format!("{}/api/v1/audit/reports/{}", self.api_url, id);
-        
+
         let report: AuditReport = self.client.get(&endpoint)
             .send()
             .await?
             .json()
             .await?;
-            
+
         report.validate()?;
         Ok(report)
     }

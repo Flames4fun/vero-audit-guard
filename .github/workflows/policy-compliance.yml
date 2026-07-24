@@ -119,7 +119,6 @@ jobs:
         run: |
           node <<'EOF'
           const PolicyEngine = require('./dist/policy-engine').default;
-          const AuditTrail = require('./dist/audit-trail').default;
           const fs = require('fs');
           
           // Load PR data (already contains file_contents from extract-pr-data step if run locally)
@@ -152,19 +151,13 @@ jobs:
           (async () => {
             const result = await engine.evaluate(prData);
 
-            // On-chain anchoring
-            if (process.env.ANCHOR_ON_CHAIN === 'true' && process.env.AUDIT_KEYPAIR_SECRET) {
-              console.log('🔗 Anchoring audit report on-chain...');
-              try {
-                const trail = new AuditTrail();
-                const txHash = await trail.anchor(result);
-                console.log(`✅ Audit report anchored. Stellar TX: ${txHash}`);
-                result.anchored_tx = txHash;
-              } catch (error) {
-                console.error(`❌ Anchoring failed: ${error.message}`);
-              }
-            }
-            
+            // On-chain anchoring intentionally does NOT happen here. This
+            // workflow runs on unreviewed PR code (pull_request: opened/
+            // synchronize/reopened/edited), so it must never hold signing
+            // authority. Confirmed audit records are anchored separately,
+            // after merge, by anchor-on-merge.yml under the protected
+            // `production-anchor` environment.
+
             // Push alerts to Guardian Dashboard if configured
             await engine.reportToDashboard(result, prData);
 

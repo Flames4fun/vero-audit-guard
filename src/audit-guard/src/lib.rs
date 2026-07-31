@@ -332,6 +332,17 @@ impl AuditGuardClient {
         } else {
             Err(AuditGuardError::ApiFailure { status: response.status() })
         }
+        let endpoint = format!("{}/api/v1/audit/reports", self.api_url);
+
+        let response = self.client.post(&endpoint).json(report).send().await?;
+
+        response
+            .error_for_status()
+            .map(|_| ())
+            .map_err(|error| match error.status() {
+                Some(status) => AuditGuardError::ApiStatus(status),
+                None => AuditGuardError::Request(error),
+            })
     }
 
     /// Fetches a specific audit report
@@ -939,5 +950,32 @@ mod tests {
             err.to_string(),
             "Anomaly dispatch failed after 3 attempt(s): timeout"
         );
+    }
+
+    #[test]
+    fn rejects_invalid_api_urls() {
+        assert!(matches!(
+            AuditGuardClient::new("localhost:8080"),
+            Err(AuditGuardError::InvalidApiUrl)
+        ));
+    }
+
+    #[tokio::test]
+    async fn rejects_invalid_report_input() {
+        let client = AuditGuardClient::new("http://localhost:8080").unwrap();
+        let report = AuditReport {
+            policy_name: "  ".to_string(),
+            compliant: true,
+            violations: vec![],
+        };
+
+        assert!(matches!(
+            client.submit_report(&report).await,
+            Err(AuditGuardError::InvalidReport)
+        ));
+        assert!(matches!(
+            client.get_report("../etc/passwd").await,
+            Err(AuditGuardError::InvalidReportId)
+        ));
     }
 }

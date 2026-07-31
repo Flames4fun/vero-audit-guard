@@ -137,6 +137,14 @@ jobs:
         run: npm ci
         working-directory: src/audit-guard
 
+      - name: Build audit-guard
+        run: npm run build
+        working-directory: src/audit-guard
+
+      - name: Run RBAC regression coverage
+        run: npm run test:rbac:coverage
+        working-directory: src/audit-guard
+
       - name: Download scan report
         uses: actions/download-artifact@v4
         with:

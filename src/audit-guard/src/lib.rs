@@ -100,6 +100,8 @@ pub enum AuditGuardError {
     RequestExpired { request_id: String, expired_at: u64 },
 }
 
+pub mod hot_reload;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AuditReport {
     pub policy_name: String,

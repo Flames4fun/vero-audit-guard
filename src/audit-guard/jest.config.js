@@ -18,5 +18,8 @@ module.exports = {
       lines: 70,
       statements: 70,
     },
+    "./src/batch-contract-call-processor.ts": {
+      statements: 80,
+    },
   },
 };

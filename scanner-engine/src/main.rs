@@ -8,6 +8,7 @@ use std::{
     path::{Path, PathBuf},
     time::{SystemTime, UNIX_EPOCH},
 };
+use thiserror::Error;
 use walkdir::WalkDir;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -25,6 +26,30 @@ struct ScanReport {
     total_files: usize,
     findings: Vec<Finding>,
     report_hash: String,
+}
+
+/// Structured error type for all scanner-engine failure modes.
+/// Each variant maps to a distinct exit code and stderr format string.
+#[derive(Debug, Error)]
+pub enum ScannerError {
+    #[error("io error: {path}: {source}")]
+    IoError {
+        path: String,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("serialization failed: {0}")]
+    SerializationError(#[source] serde_json::Error),
+    #[error("report write failed: {path}: {source}")]
+    ReportWriteError {
+        path: String,
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("invalid target: {path}: {reason}")]
+    InvalidTarget { path: String, reason: String },
+    #[error("report integrity check failed")]
+    IntegrityCheckFailed,
 }
 
 /// Static analysis rules applied to Soroban/Rust contract source files.
@@ -53,6 +78,7 @@ fn compile_rules(rules: &[(&'static str, &'static str, &'static str)]) -> Vec<Co
     rules
         .iter()
         .map(|(pat, id, severity)| CompiledRule {
+            // SAFETY: static regex patterns are validated at compile time; panic here is intentional
             regex: Regex::new(pat).expect("static scanner rule must compile"),
             id,
             severity,
@@ -60,10 +86,16 @@ fn compile_rules(rules: &[(&'static str, &'static str, &'static str)]) -> Vec<Co
         .collect()
 }
 
-fn scan_file(path: &Path, rules: &[CompiledRule]) -> Vec<Finding> {
+/// Returns (readable: bool, findings: Vec<Finding>).
+/// On read failure, emits a WARN to stderr and returns (false, vec![]).
+/// Readable files that produce no findings return (true, vec![]).
+fn scan_file(path: &Path, rules: &[CompiledRule]) -> (bool, Vec<Finding>) {
     let content = match fs::read_to_string(path) {
         Ok(c) => c,
-        Err(_) => return vec![],
+        Err(e) => {
+            eprintln!("[scanner] WARN: skipped {}: {}", path.display(), e);
+            return (false, vec![]);
+        }
     };
 
     let mut findings = Vec::new();
@@ -87,7 +119,7 @@ fn scan_file(path: &Path, rules: &[CompiledRule]) -> Vec<Finding> {
             }
         }
     }
-    findings
+    (true, findings)
 }
 
 fn rust_source_files(target: &str) -> Vec<PathBuf> {
@@ -99,12 +131,17 @@ fn rust_source_files(target: &str) -> Vec<PathBuf> {
         .collect()
 }
 
+/// Returns (readable_file_count, sorted_findings).
+/// Only successfully-read files count toward total_files in the report.
 fn scan_target(target: &str, rules: &[CompiledRule]) -> (usize, Vec<Finding>) {
     let files = rust_source_files(target);
-    let mut findings: Vec<Finding> = files
+    let results: Vec<(bool, Vec<Finding>)> = files
         .par_iter()
-        .flat_map(|path| scan_file(path, rules))
+        .map(|path| scan_file(path, rules))
         .collect();
+
+    let readable_count = results.iter().filter(|(ok, _)| *ok).count();
+    let mut findings: Vec<Finding> = results.into_iter().flat_map(|(_, f)| f).collect();
 
     findings.sort_by(|a, b| {
         a.file
@@ -113,7 +150,7 @@ fn scan_target(target: &str, rules: &[CompiledRule]) -> (usize, Vec<Finding>) {
             .then(a.rule.cmp(&b.rule))
     });
 
-    (files.len(), findings)
+    (readable_count, findings)
 }
 
 fn sha256_of(data: &str) -> String {
@@ -157,7 +194,14 @@ fn main() {
     let rules = compile_rules(RULES);
     let (file_count, all_findings) = scan_target(&target, &rules);
 
-    let report_json = serde_json::to_string_pretty(&all_findings).unwrap();
+    // Serialize findings — exit 2 on failure, nothing written to stdout
+    let report_json = match serde_json::to_string_pretty(&all_findings) {
+        Ok(json) => json,
+        Err(e) => {
+            eprintln!("[scanner] ERROR: serialization failed: {}", e);
+            std::process::exit(2);
+        }
+    };
     let hash = sha256_of(&report_json);
 
     let report = ScanReport {
@@ -183,19 +227,45 @@ fn main() {
     let out = serde_json::to_string_pretty(&report).unwrap();
     println!("{}", out);
 
-    // Write report to /reports directory
-    let root_dir = env::current_dir().unwrap();
+    // Write report to /reports directory — exit 3 on failure
+    let root_dir = match env::current_dir() {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!(
+                "[scanner] ERROR: report write failed: reports/latest-scan.json: {}",
+                e
+            );
+            std::process::exit(3);
+        }
+    };
     let report_dir = root_dir.join("reports");
-    fs::create_dir_all(&report_dir).ok();
+    if let Err(e) = fs::create_dir_all(&report_dir) {
+        eprintln!(
+            "[scanner] ERROR: report write failed: {}: {}",
+            report_dir.display(),
+            e
+        );
+        std::process::exit(3);
+    }
     let report_path = report_dir.join("latest-scan.json");
-    fs::write(&report_path, &out).expect("Failed to write report");
+    if let Err(e) = fs::write(&report_path, &out) {
+        eprintln!(
+            "[scanner] ERROR: report write failed: {}: {}",
+            report_path.display(),
+            e
+        );
+        std::process::exit(3);
+    }
     eprintln!("[scanner] Report written to {}", report_path.display());
     eprintln!("[scanner] Report SHA-256: {}", report.report_hash);
 
+    // CRITICAL findings check — exit 1
     if report.findings.iter().any(|f| f.severity == "CRITICAL") {
         eprintln!("[scanner] CRITICAL findings detected — failing build.");
         std::process::exit(1);
     }
+
+    eprintln!("[scanner] INFO: post-scan check passed");
 }
 
 #[cfg(test)]
@@ -218,9 +288,11 @@ mod tests {
     fn scan_target_uses_worker_pool_and_returns_stable_findings() {
         let dir = temp_scan_dir();
         fs::write(dir.join("b.rs"), "fn b() { unsafe { panic!(\"boom\") } }\n")
-        .expect("b.rs should be written");
-        fs::write(dir.join("a.rs"), "fn a() { unwrap(); }\n").expect("a.rs should be written");
-        fs::write(dir.join("ignored.txt"), "unwrap()\n").expect("ignored file should be written");
+            .expect("b.rs should be written");
+        fs::write(dir.join("a.rs"), "fn a() { unwrap(); }\n")
+            .expect("a.rs should be written");
+        fs::write(dir.join("ignored.txt"), "unwrap()\n")
+            .expect("ignored file should be written");
 
         let rules = compile_rules(RULES);
         let target = dir.to_string_lossy();

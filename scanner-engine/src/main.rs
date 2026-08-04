@@ -10,6 +10,7 @@ use std::{
 };
 use thiserror::Error;
 use walkdir::WalkDir;
+use multisig_scanner::{GovernanceFinding, MultisigScannerError, scan_multisig_governance};
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Finding {
@@ -25,6 +26,7 @@ struct ScanReport {
     target: String,
     total_files: usize,
     findings: Vec<Finding>,
+    governance_findings: Vec<GovernanceFinding>,
     report_hash: String,
 }
 
@@ -204,11 +206,23 @@ fn main() {
     };
     let hash = sha256_of(&report_json);
 
-    let report = ScanReport {
+    let combined_report = ScanReport {
         target: target.clone(),
         total_files: file_count,
         findings: all_findings,
-        report_hash: hash,
+        governance_findings,
+        report_hash: String::new(),
+    };
+
+    let report_json = serde_json::to_string_pretty(&combined_report).unwrap();
+    let hash = sha256_of(&report_json);
+
+    let report = ScanReport {
+        target: combined_report.target,
+        total_files: combined_report.total_files,
+        findings: combined_report.findings,
+        governance_findings: combined_report.governance_findings,
+        report_hash: hash.clone(),
     };
 
     // ZK-based state validation hook: verify the scan target (pre-state)
@@ -258,6 +272,7 @@ fn main() {
     }
     eprintln!("[scanner] Report written to {}", report_path.display());
     eprintln!("[scanner] Report SHA-256: {}", report.report_hash);
+    eprintln!("[scanner] Governance findings: {}", report.governance_findings.len());
 
     // CRITICAL findings check — exit 1
     if report.findings.iter().any(|f| f.severity == "CRITICAL") {

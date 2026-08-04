@@ -182,8 +182,7 @@ impl AuditReport {
         if self.policy_name.trim().is_empty() {
             return Err(AuditGuardError::EmptyPolicyName);
         }
-        
-        // Ensure policy name only contains alphanumeric characters, dashes, or underscores
+
         if !self.policy_name.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
             return Err(AuditGuardError::InvalidPolicyName(self.policy_name.clone()));
         }
@@ -337,7 +336,6 @@ impl AuditGuardClient {
             .map_err(|error| AuditGuardError::InvalidEndpoint(error.to_string()))
     }
 
-    /// Creates a new AuditGuardClient and validates the URL immediately
     pub fn new_validated(api_url: &str) -> Result<Self, AuditGuardError> {
         validate_url(api_url)?;
         let parsed = Url::parse(api_url)
@@ -354,9 +352,9 @@ impl AuditGuardClient {
     pub async fn submit_report(&self, report: &AuditReport) -> Result<(), AuditGuardError> {
         validate_url(self.api_url.as_str())?;
         report.validate()?;
-        
+
         let endpoint = format!("{}/api/v1/audit/reports", self.api_url);
-        
+
         let response = self.client.post(&endpoint)
             .json(report)
             .send()
@@ -373,7 +371,7 @@ impl AuditGuardClient {
     pub async fn get_report(&self, id: &str) -> Result<AuditReport, AuditGuardError> {
         validate_url(self.api_url.as_str())?;
         if id.trim().is_empty() {
-            return Err(AuditGuardError::InvalidUrlFormat("Empty report ID".to_string()));
+            return Err(AuditGuardError::InvalidReport("report id must not be empty".into()));
         }
         if id.contains('/') || id.contains("..") {
             return Err(AuditGuardError::InvalidReportId(id.to_string()));

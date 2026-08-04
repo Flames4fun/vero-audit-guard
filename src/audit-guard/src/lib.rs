@@ -26,6 +26,7 @@ pub use zk_state_validator::{
 };
 pub mod telemetry_queue;
 pub mod drift_consumer;
+pub mod policy_bundle;
 
 pub mod severity;
 

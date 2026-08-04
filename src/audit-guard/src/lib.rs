@@ -27,7 +27,14 @@ pub use zk_state_validator::{
 pub mod telemetry_queue;
 pub mod drift_consumer;
 
-#[derive(Error, Debug)]
+pub mod severity;
+
+pub use severity::{
+    ConfirmedEvent, DrivenAlertAction, EscalationPolicyConfig, EscalationTarget, SeverityEngine,
+    SeverityTier, TelemetryRecord, TelemetryRecordType,
+};
+
+#[derive(Error, Debug, PartialEq, Eq)]
 pub enum AuditGuardError {
     #[error("API URL cannot be empty")]
     EmptyApiUrl,
@@ -60,11 +67,11 @@ pub enum AuditGuardError {
     EmptyViolation,
 
     #[error("HTTP client error: {0}")]
-    Http(#[from] reqwest::Error),
+    Http(String),
 
     #[error("API response failed with status {status}")]
     ApiFailure {
-        status: reqwest::StatusCode,
+        status: u16,
     },
 
     // ---- Anomaly dispatch errors (Issue #177) ----
@@ -363,7 +370,7 @@ impl AuditGuardClient {
         if response.status().is_success() {
             Ok(())
         } else {
-            Err(AuditGuardError::ApiFailure { status: response.status() })
+            Err(AuditGuardError::ApiFailure { status: response.status().as_u16() })
         }
     }
 

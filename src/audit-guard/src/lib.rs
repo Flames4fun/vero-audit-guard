@@ -124,6 +124,30 @@ pub enum AuditGuardError {
 
     #[error("Invalid report ID: {0}")]
     InvalidReportId(String),
+
+    #[error("Invalid severity tier: {0}")]
+    InvalidSeverityTier(String),
+
+    #[error("Cannot classify unconfirmed event: {0}")]
+    UnconfirmedEvent(String),
+
+    #[error("Event ID cannot be empty")]
+    EmptyEventId,
+
+    #[error("Invalid event timestamp: {0}")]
+    InvalidTimestamp(i64),
+
+    #[error("Adversarial payload detected: {0}")]
+    AdversarialPayload(String),
+
+    #[error("HTTP request failed: {0}")]
+    Reqwest(String),
+}
+
+impl From<reqwest::Error> for AuditGuardError {
+    fn from(err: reqwest::Error) -> Self {
+        AuditGuardError::Reqwest(err.to_string())
+    }
 }
 
 pub mod hot_reload;
@@ -379,7 +403,7 @@ impl AuditGuardClient {
     pub async fn get_report(&self, id: &str) -> Result<AuditReport, AuditGuardError> {
         validate_url(self.api_url.as_str())?;
         if id.trim().is_empty() {
-            return Err(AuditGuardError::InvalidReport("report id must not be empty".into()));
+            return Err(AuditGuardError::InvalidReportId("report id must not be empty".into()));
         }
         if id.contains('/') || id.contains("..") {
             return Err(AuditGuardError::InvalidReportId(id.to_string()));

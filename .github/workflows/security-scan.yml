@@ -141,6 +141,28 @@ jobs:
         run: npm run build
         working-directory: src/audit-guard
 
+      - name: Run audit-guard CLI entrypoint tests
+        run: >-
+          npm test -- --runInBand --runTestsByPath
+          src/cli.test.ts
+          src/archive-cli.test.ts
+          src/security-gate-cli.test.ts
+          src/policy-bundle-cli.test.ts
+        working-directory: src/audit-guard
+
+      - name: Lint audit-guard CLI entrypoints and tests
+        run: >-
+          npm exec -- eslint
+          src/cli.ts
+          src/cli.test.ts
+          src/archive-cli.ts
+          src/archive-cli.test.ts
+          src/security-gate-cli.ts
+          src/security-gate-cli.test.ts
+          src/policy-bundle-cli.ts
+          src/policy-bundle-cli.test.ts
+        working-directory: src/audit-guard
+
       - name: Run RBAC regression coverage
         run: npm run test:rbac:coverage
         working-directory: src/audit-guard

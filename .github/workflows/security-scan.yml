@@ -120,6 +120,10 @@ jobs:
         run: npm run build
         working-directory: verifiable-audit-trail
 
+      - name: Run audit-trail tests
+        run: npm test -- --runInBand
+        working-directory: verifiable-audit-trail
+
   security-health-check:
     name: Security Health Check
     runs-on: ubuntu-latest

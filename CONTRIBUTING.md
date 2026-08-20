@@ -87,12 +87,32 @@ chmod +x BUILD_GUARD.sh
 
 See the README for what each step does.
 
+## Changelog
+
+We use [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) for our `CHANGELOG.md`.
+When submitting a pull request, please ensure that you update the `CHANGELOG.md` to reflect your changes.
+
+### How to update the Changelog
+
+- All unreleased changes should be added under the `## [Unreleased]` section.
+- Categorize your changes using one of the following labels:
+  - `Added` for new features.
+  - `Changed` for changes in existing functionality.
+  - `Deprecated` for soon-to-be removed features.
+  - `Removed` for now removed features.
+  - `Fixed` for any bug fixes.
+  - `Security` in case of vulnerabilities.
+- Provide a clear, concise description of the change.
+
+When a new version is released, the `[Unreleased]` changes will be moved to a specific version block by the maintainers.
+
 ## Pull requests
 
 1. Branch from `main` using the issue naming convention when one is specified (for example `chore/issue-279-add-docker-compose-setup`).
 2. Keep changes scoped to the issue. Prefer additive tooling over drive-by refactors.
 3. Make sure new TypeScript compiles under `strict` and that package tests still pass (`npm test` / `cargo test` in the touched crate).
-4. Open the PR against `Vero-protocol/vero-audit-guard` and reference the issue (`Closes #279`).
-5. Fill in the repository PR description completely — state what was completed from the issue.
+4. Update `CHANGELOG.md` under `## [Unreleased]` with a clear, concise description of your change (see Changelog section above).
+5. Open the PR against `Vero-protocol/vero-audit-guard` and reference the issue (`Closes #279`).
+6. Fill in the repository PR description completely — state what was completed from the issue.
 
 Do not commit `.env`, keypairs, or report JSON that may contain sensitive paths.

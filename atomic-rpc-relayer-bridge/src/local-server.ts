@@ -53,7 +53,7 @@ export function createLocalBridgeHandler(options: LocalServerOptions = {}): {
 
   const bridge = new AtomicRpcRelayerBridge({
     endpoints: options.endpoints ?? defaultEndpoints(),
-    requireAtomicVerification: false,
+    requireAtomicVerification: !disableAtomicVerification,
   });
 
   const json = (res: ServerResponse, status: number, body: unknown): void => {
